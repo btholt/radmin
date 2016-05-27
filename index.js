@@ -1,5 +1,6 @@
 const scanner = require('./scanner')
 const logger = require('./logger')
+const userSearch = require('./modules/users')
 const Botkit = require('botkit')
 const co = require('co')
 const _ = require('lodash')
@@ -41,4 +42,13 @@ controller.hears(['scan'], ['direct_mention'], (bot, msg) => {
     return logger.info('This is an invalid format. Try saying `scan <username>`', replyCB)
   }
   scanner.scan(parts[1], logger, bot.reply.bind(this, msg))
+})
+
+controller.hears(['whois'], ['direct_mention'], (bot, msg) => {
+  const parts = msg.text.split(' ')
+  const replyCB = bot.reply.bind(this, msg)
+  if (parts.length !== 2 || parts[0] !== 'whois') {
+    return logger.info('This is an invalid format. Try saying `whois <username>`', replyCB)
+  }
+  userSearch.whois(parts[1], logger, replyCB)
 })

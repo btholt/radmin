@@ -1,4 +1,5 @@
-data.json
+data*.json
 node_modules/
 .DS_Store
 config.json
+former.json
