@@ -19,7 +19,7 @@ const stillAdmin = (data, index) => {
 
 const fullScan = (logger, replyCB) => (
   co(function * () {
-    logger.info('start full scan', replyCB)
+    logger.info("Woah. start. drop. collaborate. It's a full system scan. :burrito:", replyCB)
     const dbBuffer = yield readFile(DB_PATH)
     const db = JSON.parse(dbBuffer)
     const usersInfo = yield Promise.all(db.current.map((user) => fetchUserPage(user.username)))
@@ -50,7 +50,7 @@ const updateDBFullScan = (users, previous, logger, replyCB) => (
       yield writeFile(DB_PATH, JSON.stringify({current, former},null,4))
     }
     else {
-      logger.info('No new exreddits found with fullScan', replyCB)
+      logger.info('Well, no new radmins found. :scream:', replyCB)
     }
     return notAdmins
   }).catch((err) => logger.error(err))
@@ -76,11 +76,11 @@ const updateDBScan = (user, logger, replyCB) => (
     const wasAdmin = db.current.filter((admin) => admin.username === user.username).length > 0
     if (user.isAdmin) {
       if (wasAdmin) {
-        logger.info(`${user.username} was already known to be an admin`, replyCB)
+        logger.info(`${user.username} already is a radmin.`, replyCB)
       }
       else {
         result.isNewAdmin = true
-        logger.write(`${user.username} is a new admin`, replyCB)
+        logger.write(`${user.username} already is a radmin.`, replyCB)
         db.current.push(_.omit(user, ['isAdmin']))
         yield writeFile(DB_PATH, JSON.stringify(db,null,4))
       }
@@ -88,13 +88,13 @@ const updateDBScan = (user, logger, replyCB) => (
     else {
       if (wasAdmin) {
         result.isNewExreddit = true
-        logger.write(`${user.username} is a new exreddit`, replyCB)
+        logger.write(`Looks like ${user.username} is a new radmin! :party\:`, replyCB)
         db.former.push(_.omit(user, ['isAdmin']))
         db.current = db.current.filter((admin) => admin.username !== user.username)
         yield writeFile(DB_PATH, JSON.stringify(db,null,4))
       }
       else {
-        logger.info(`${user.username} was already known as not being an admin`, replyCB)
+        logger.info(`${user.username} already is a radmin.`, replyCB)
       }
     }
     return result
