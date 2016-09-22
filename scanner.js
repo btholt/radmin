@@ -1,14 +1,16 @@
 const cheerio = require('cheerio')
 const agent = require('superagent-promise')(require('superagent'), Promise)
-const promisify = require('es6-promisify')
 const co = require('co')
 const _ = require('lodash')
 const fs = require('fs')
-const readFile = promisify(fs.readFile)
-const writeFile = promisify(fs.writeFile)
+const { connect } = require('mongodb').MongoClient
 const DB_PATH = './data.json'
 const PROFILE_URL_BASE = 'https://www.reddit.com/user/'
 const ADMIN_SELECTOR = '.titlebox .admin'
+const configBuffer = fs.readFileSync('./config.json')
+const config = JSON.parse(configBuffer)
+const { mongoUsername, mongoPassword, mongoHost, mongoPath } = config.private[process.env.NODE_ENV]
+const mongoUrl = `mongodb://${mongoUsername}:${mongoPassword}@${mongoHost}/${mongoPath}`
 
 const fetchUserPage = (user) => agent.get(`${PROFILE_URL_BASE}${user}`)
 const stillAdmin = (data, index) => {
@@ -20,88 +22,97 @@ const stillAdmin = (data, index) => {
 const fullScan = (logger, replyCB) => (
   co(function * () {
     logger.info('start full scan', replyCB)
-    const dbBuffer = yield readFile(DB_PATH)
-    const db = JSON.parse(dbBuffer)
-    const usersInfo = yield Promise.all(db.current.map((user) => fetchUserPage(user.username)))
+    const db = yield connect(mongoUrl)
+    const collection = db.collection('admins')
+    const docs = yield collection.find({isAdmin: true}).toArray()
+    const usersInfo = yield Promise.all(docs.map((user) => fetchUserPage(user.username)))
     const users = usersInfo
       .map(stillAdmin)
       .map((user, index) => {
         const obj = {}
-        Object.assign(obj, user, db.current[index])
+        Object.assign(obj, docs[index], user)
         return obj
       })
     logger.result(JSON.stringify(users,null,0))
-    const newlyRemoved = yield updateDBFullScan(users, db, logger, replyCB)
+    const newlyRemoved = yield updateDBFullScan(users, collection, logger, replyCB)
     return newlyRemoved
-  }).catch((err) => logger.error(err))
+  }).catch((err) => logger.error(err), replyCB)
 )
 
-const updateDBFullScan = (users, previous, logger, replyCB) => (
+const updateDBFullScan = (users, collection, logger, replyCB) => (
   co(function * () {
     logger.info('diffing fullScan with new finds')
     const notAdmins = users.filter((user) => !user.isAdmin)
+    console.log(notAdmins)
     if (notAdmins.length > 0) {
-      logger.write(`New exreddits found: ${JSON.stringify(notAdmins,null,0)}`, replyCB)
-      const former = _.uniqBy(previous.former.concat(notAdmins), (user) => user.username)
-        .map((user) => _.omit(user, ['isAdmin']))
-      const current = users
-        .filter((user) => user.isAdmin)
-        .map((user) => _.omit(user, ['isAdmin']))
-      yield writeFile(DB_PATH, JSON.stringify({current, former},null,4))
+      const bulk = collection.initializeUnorderedBulkOp()
+      const names = notAdmins.map((notAdmin) => notAdmin.username).join(', ')
+      logger.write(`New exreddits found: ${names}`, replyCB)
+      const update = notAdmins.forEach((notAdmin) => {
+        bulk.find({username: notAdmin.username}).updateOne({$set: {isAdmin: false}})
+      })
+      const result = yield bulk.execute()
     }
     else {
       logger.info('No new exreddits found with fullScan', replyCB)
     }
     return notAdmins
-  }).catch((err) => logger.error(err))
+  }).catch((err) => logger.error(err, replyCB))
 )
 
 const scan = (username, logger, replyCB) => (
   co(function * () {
     logger.info(`start scan for ${username}`, replyCB)
-    const userData = yield fetchUserPage(username)
-    const user = Object.assign(stillAdmin(userData), {username})
-    logger.result(JSON.stringify(user,null,0))
-    const didChange = yield updateDBScan(user, logger, replyCB)
-    return didChange
-  }).catch((err) => logger.error(err))
+    const [ userData, db ] = yield Promise.all([
+      yield fetchUserPage(username),
+      yield connect(mongoUrl)
+    ])
+    const collection = db.collection('admins')
+    const siteUser = stillAdmin(userData)
+    console.log(siteUser)
+
+    const user = yield collection.findOne({username})
+    let result
+
+    if (user) {
+      if (user.isAdmin && siteUser.isAdmin) {
+        logger.info(`${username} was already known to be an admin`, replyCB)
+      } else if (user.isAdmin && !siteUser.isAdmin) {
+        logger.write(`${username} is a new exreddit`, replyCB)
+        result = yield collection.updateOne({username}, {$set: {isAdmin: false}})
+      } else if (!user.isAdmin && siteUser.isAdmin) {
+        logger.write(`${username} was an exreddit and now is an admin? Traitor`, replyCB)
+        result = yield collection.updateOne({username}, {$set: {isAdmin: true}})
+      } else {
+        logger.info(`${username} was already known to be an exreddit`, replyCB)
+      }
+    } else {
+      if (siteUser.isAdmin) {
+        logger.write(`${username} is a new admin`, replyCB)
+        result = yield collection.insertOne({isAdmin: true, username})
+      } else {
+        logger.write(`${username} is not an admin`, replyCB)
+      }
+    }
+    if (result && result.insertedCount <= 0 && result.modifiedCount <= 0) {
+      logger.error(`${username} not written to the database!`, replyCB)
+    }
+  }).catch((err) => logger.error(err, replyCB))
 )
 
-const updateDBScan = (user, logger, replyCB) => (
+const list = (logger, replyCB) => (
   co(function * () {
-    logger.info(`diffing scan with ${user.username}`)
-    const result = {isNewAdmin: false, isNewExreddit: false}
-    const dbBuffer = yield readFile(DB_PATH)
-    const db = JSON.parse(dbBuffer)
-    const wasAdmin = db.current.filter((admin) => admin.username === user.username).length > 0
-    if (user.isAdmin) {
-      if (wasAdmin) {
-        logger.info(`${user.username} was already known to be an admin`, replyCB)
-      }
-      else {
-        result.isNewAdmin = true
-        logger.write(`${user.username} is a new admin`, replyCB)
-        db.current.push(_.omit(user, ['isAdmin']))
-        yield writeFile(DB_PATH, JSON.stringify(db,null,4))
-      }
-    }
-    else {
-      if (wasAdmin) {
-        result.isNewExreddit = true
-        logger.write(`${user.username} is a new exreddit`, replyCB)
-        db.former.push(_.omit(user, ['isAdmin']))
-        db.current = db.current.filter((admin) => admin.username !== user.username)
-        yield writeFile(DB_PATH, JSON.stringify(db,null,4))
-      }
-      else {
-        logger.info(`${user.username} was already known as not being an admin`, replyCB)
-      }
-    }
-    return result
-  }).catch((err) => logger.error(err))
+    logger.info('retrieving current admins from the database', replyCB)
+    const db = yield connect(mongoUrl)
+    const collection = db.collection('admins')
+    const docs = yield collection.find({isAdmin: true}).toArray()
+    const names = docs.map((admin) => admin.username).sort()
+    logger.result(`current admins: ${names.join(', ')}`, replyCB)
+  })
 )
 
 module.exports = {
   fullScan,
-  scan
+  scan,
+  list
 }

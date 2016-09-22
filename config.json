@@ -1,0 +1,22 @@
+{
+  "superusers": [ "U0QKSFA82", "U0QJZG2DU" ],
+  "users": [],
+  "allUsersCanScan": true,
+  "allUsersCanFullScan": false,
+  "private": {
+    "production": {
+      "slackKey": "xoxb-45843396454-f3WtZPd7EnTS9sM23CLJ5oc8",
+      "mongoUsername": "burrito",
+      "mongoPassword": "tacosauce",
+      "mongoHost": "ds035786.mlab.com:35786",
+      "mongoPath": "radmin"
+    },
+    "development": {
+      "slackKey": "xoxb-46027128835-tzUWIIA6d2nh5aBljALH4lYI",
+      "mongoUsername": "burrito",
+      "mongoPassword": "tacosauce",
+      "mongoHost": "ds035786.mlab.com:35786",
+      "mongoPath": "radmin"
+    }
+  }
+}

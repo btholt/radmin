@@ -6,7 +6,7 @@ const _ = require('lodash')
 const fs = require('fs')
 const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
-const token = config.private.slackKey
+const token = config.private[process.env.NODE_ENV].slackKey
 
 if (!token) {
   logger.error('No Slack token')
@@ -18,7 +18,8 @@ const controller = Botkit.slackbot({
 })
 
 const botAPI = controller.spawn({
-  token
+  token,
+  retry: 'Infinity'
 }).startRTM((err) => {
   if (err) {
     logger.error('Slack Error', err)
@@ -40,5 +41,12 @@ controller.hears(['scan'], ['direct_mention'], (bot, msg) => {
   if (parts.length !== 2 || parts[0] !== 'scan') {
     return logger.info('This is an invalid format. Try saying `scan <username>`', replyCB)
   }
-  scanner.scan(parts[1], logger, bot.reply.bind(this, msg))
+  scanner.scan(parts[1].toLowerCase(), logger, bot.reply.bind(this, msg))
+})
+
+controller.hears(['list'], ['direct_mention'], (bot, msg) => {
+  const parts = msg.text.split(' ')
+  if (parts[0] !== 'list') return
+
+  scanner.list(logger, bot.reply.bind(this, msg))
 })

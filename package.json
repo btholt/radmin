@@ -4,7 +4,8 @@
   "description": "radmin the Talking Burrito",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "NODE_ENV=production node index.js",
+    "dev": "NODE_ENV=development node index.js"
   },
   "keywords": [],
   "author": "Brian Holt <btholt@gmail.com>",
@@ -14,8 +15,8 @@
     "chalk": "1.1.3",
     "cheerio": "0.20.0",
     "co": "4.6.0",
-    "es6-promisify": "4.1.0",
     "lodash": "4.13.1",
+    "mongodb": "2.2.10",
     "superagent": "2.0.0-alpha.3",
     "superagent-promise": "1.1.0"
   },
