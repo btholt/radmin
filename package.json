@@ -7,6 +7,9 @@
     "start": "NODE_ENV=production node index.js",
     "dev": "NODE_ENV=development node index.js"
   },
+  "engines": {
+    "node": "v6.2.0"
+  },
   "keywords": [],
   "author": "Brian Holt <btholt@gmail.com>",
   "license": "MIT",

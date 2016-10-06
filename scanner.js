@@ -10,13 +10,37 @@ const ADMIN_SELECTOR = '.titlebox .admin'
 const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
 const { mongoUsername, mongoPassword, mongoHost, mongoPath } = config.private[process.env.NODE_ENV]
+const maxConnections = config.maxConnections || 3
 const mongoUrl = `mongodb://${mongoUsername}:${mongoPassword}@${mongoHost}/${mongoPath}`
 
-const fetchUserPage = (user) => agent.get(`${PROFILE_URL_BASE}${user}`)
+const fetchUserPage = (user) => agent.get(`${PROFILE_URL_BASE}${user}`).set('Accept-Encoding','gzip, deflate').end()
 const stillAdmin = (data, index) => {
   const $ = cheerio.load(data.text)
   const isAdmin = $(ADMIN_SELECTOR).length > 0
   return { isAdmin }
+}
+
+const throttledGetUsersInfo = (usernames, maxRequests) => {
+  return new Promise((resolve, reject) => {
+    const promises = []
+    let index = maxRequests
+    const requestNewData = (data) => {
+      if (index < usernames.length) {
+        const promise = fetchUserPage(usernames[index])
+        promises.push(promise)
+        promise.then(requestNewData)
+        index++
+      } else {
+        Promise.all(promises).then(resolve)
+      }
+    }
+    for (let i = 0; i < maxRequests && i < usernames.length; i++) {
+      const firstPromise = fetchUserPage(usernames[i])
+      promises.push(firstPromise)
+      firstPromise.then(requestNewData)
+      index++
+    }
+  })
 }
 
 const fullScan = (logger, replyCB) => (
@@ -25,7 +49,9 @@ const fullScan = (logger, replyCB) => (
     const db = yield connect(mongoUrl)
     const collection = db.collection('admins')
     const docs = yield collection.find({isAdmin: true}).toArray()
-    const usersInfo = yield Promise.all(docs.map((user) => fetchUserPage(user.username)))
+    const usernames = docs.map((user) => user.username)
+    const usersInfo = yield throttledGetUsersInfo(usernames, 3)
+    // const usersInfo = yield Promise.all(docs.map((user) => fetchUserPage(user.username)))
     const users = usersInfo
       .map(stillAdmin)
       .map((user, index) => {
@@ -108,7 +134,7 @@ const list = (logger, replyCB) => (
     const docs = yield collection.find({isAdmin: true}).toArray()
     const names = docs.map((admin) => admin.username).sort()
     logger.result(`current admins: ${names.join(', ')}`, replyCB)
-  })
+  }).catch((err) => logger.error(err, replyCB))
 )
 
 module.exports = {

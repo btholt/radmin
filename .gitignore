@@ -1,4 +1,2 @@
-data.json
-node_modules/
-.DS_Store
 config.json
+node_modules/
