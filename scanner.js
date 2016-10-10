@@ -4,12 +4,11 @@ const co = require('co')
 const _ = require('lodash')
 const fs = require('fs')
 const { connect } = require('mongodb').MongoClient
-const DB_PATH = './data.json'
 const PROFILE_URL_BASE = 'https://www.reddit.com/user/'
 const ADMIN_SELECTOR = '.titlebox .admin'
 const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
-const { mongoUsername, mongoPassword, mongoHost, mongoPath } = config.private[process.env.NODE_ENV]
+const { mongoUsername, mongoPassword, mongoHost, mongoPath, mongoAdminCollection } = config.private[process.env.NODE_ENV]
 const maxConnections = config.maxConnections || 3
 const mongoUrl = `mongodb://${mongoUsername}:${mongoPassword}@${mongoHost}/${mongoPath}`
 
@@ -18,6 +17,15 @@ const stillAdmin = (data, index) => {
   const $ = cheerio.load(data.text)
   const isAdmin = $(ADMIN_SELECTOR).length > 0
   return { isAdmin }
+}
+
+const reduceAdminStatus = (acc, current) => {
+  if (current.isAdmin) {
+    acc[0].push(current.username)
+  } else {
+    acc[1].push(current.username)
+  }
+  return acc
 }
 
 const throttledGetUsersInfo = (usernames, maxRequests) => {
@@ -50,7 +58,7 @@ const fullScan = (logger, replyCB) => (
     const collection = db.collection('admins')
     const docs = yield collection.find({isAdmin: true}).toArray()
     const usernames = docs.map((user) => user.username)
-    const usersInfo = yield throttledGetUsersInfo(usernames, 3)
+    const usersInfo = yield throttledGetUsersInfo(usernames, maxConnections)
     // const usersInfo = yield Promise.all(docs.map((user) => fetchUserPage(user.username)))
     const users = usersInfo
       .map(stillAdmin)
@@ -80,7 +88,7 @@ const updateDBFullScan = (users, collection, logger, replyCB) => (
       const result = yield bulk.execute()
     }
     else {
-      logger.info('No new exreddits found with fullScan', replyCB)
+      logger.info('No new exreddits found', replyCB)
     }
     return notAdmins
   }).catch((err) => logger.error(err, replyCB))
@@ -93,7 +101,7 @@ const scan = (username, logger, replyCB) => (
       yield fetchUserPage(username),
       yield connect(mongoUrl)
     ])
-    const collection = db.collection('admins')
+    const collection = db.collection(mongoAdminCollection)
     const siteUser = stillAdmin(userData)
     console.log(siteUser)
 
@@ -128,17 +136,21 @@ const scan = (username, logger, replyCB) => (
 
 const list = (logger, replyCB) => (
   co(function * () {
-    logger.info('retrieving current admins from the database', replyCB)
+    logger.info('retrieving admins and exreddits from the database', replyCB)
     const db = yield connect(mongoUrl)
-    const collection = db.collection('admins')
-    const docs = yield collection.find({isAdmin: true}).toArray()
-    const names = docs.map((admin) => admin.username).sort()
-    logger.result(`current admins: ${names.join(', ')}`, replyCB)
+    const collection = db.collection(mongoAdminCollection)
+    const docs = yield collection.find({}).toArray()
+    const [admins, exreddits] = docs.reduce(reduceAdminStatus, [[], []])
+    logger.result(`*admins:* ${admins.sort().join(', ')}`, replyCB)
+    logger.result(`*exreddits:* ${exreddits.sort().join(', ')}`, replyCB)
   }).catch((err) => logger.error(err, replyCB))
 )
 
 module.exports = {
   fullScan,
   scan,
-  list
+  list,
+  throttledGetUsersInfo,
+  stillAdmin,
+  reduceAdminStatus
 }

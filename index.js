@@ -1,4 +1,5 @@
 const scanner = require('./scanner')
+const discover = require('./discover')
 const logger = require('./logger')
 const Botkit = require('botkit')
 const co = require('co')
@@ -49,4 +50,23 @@ controller.hears(['list'], ['direct_mention'], (bot, msg) => {
   if (parts[0] !== 'list') return
 
   scanner.list(logger, bot.reply.bind(this, msg))
+})
+
+controller.hears(['subreddit'], ['direct_mention'], (bot, msg) => {
+  const parts = msg.text.split(' ')
+  if (parts.length !== 2 || parts[0] !== 'subreddit') {
+    return logger.info('This is an invalid format. Try saying `subreddit <subreddit>`', replyCB)
+  }
+
+  discover.scanSubreddit(parts[1], config.maxTopics, logger, bot.reply.bind(this, msg))
+})
+
+controller.hears(['topic'], ['direct_mention'], (bot, msg) => {
+  const parts = msg.text.split(' ')
+  const replyCB = bot.reply.bind(this, msg)
+  if (parts.length !== 2 || parts[0] !== 'topic') {
+    return logger.info('This is an invalid format. Try saying `topic <topic id>`. (in https://www.reddit.com/r/blog/comments/2foivo/every_man_is_responsible_for_his_own_soul/ the topic ID is 2foivo)`', replyCB)
+  }
+
+  discover.scanTopic(parts[1], logger, replyCB)
 })
