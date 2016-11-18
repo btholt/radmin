@@ -13,6 +13,10 @@ const maxConnections = config.maxConnections || 3
 const mongoUrl = `mongodb://${mongoUsername}:${mongoPassword}@${mongoHost}/${mongoPath}`
 
 const fetchUserPage = (user) => agent.get(`${PROFILE_URL_BASE}${user}`).set('Accept-Encoding','gzip, deflate').end()
+// const fetchUserPage = (user) => {
+//   console.log('fetch', user)
+//   return Promise.resolve(user)
+// }
 const stillAdmin = (data, index) => {
   const $ = cheerio.load(data.text)
   const isAdmin = $(ADMIN_SELECTOR).length > 0
@@ -30,32 +34,37 @@ const reduceAdminStatus = (acc, current) => {
 
 const throttledGetUsersInfo = (usernames, maxRequests) => {
   return new Promise((resolve, reject) => {
-    const promises = []
-    let index = maxRequests
-    const requestNewData = (data) => {
-      if (index < usernames.length) {
-        const promise = fetchUserPage(usernames[index])
-        promises.push(promise)
-        promise.then(requestNewData)
-        index++
-      } else {
-        Promise.all(promises).then(resolve)
+    const gen = getUsersInfo(usernames)
+    const users = []
+    const requestNext = function (gen, users) {
+      const result = gen.next()
+      if (result.value) {
+        users.push(result.value)
       }
-    }
-    for (let i = 0; i < maxRequests && i < usernames.length; i++) {
-      const firstPromise = fetchUserPage(usernames[i])
-      promises.push(firstPromise)
-      firstPromise.then(requestNewData)
-      index++
+      if (!result.done) {
+        result.value.then(requestNext)
+      } else {
+        Promise.all(users).then(resolve)
+      }
+    }.bind(this, gen, users)
+    for (let i = 0; i < maxRequests; i++) {
+      requestNext()
     }
   })
+}
+
+const getUsersInfo = function * (usernames)  {
+  for (let i = 0; i < usernames.length; i++) {
+    const promise = fetchUserPage(usernames[i])
+    yield promise
+  }
 }
 
 const fullScan = (logger, replyCB) => (
   co(function * () {
     logger.info('start full scan', replyCB)
     const db = yield connect(mongoUrl)
-    const collection = db.collection('admins')
+    const collection = db.collection(mongoAdminCollection)
     const docs = yield collection.find({isAdmin: true}).toArray()
     const usernames = docs.map((user) => user.username)
     const usersInfo = yield throttledGetUsersInfo(usernames, maxConnections)
