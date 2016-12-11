@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "NODE_ENV=production node index.js",
-    "dev": "NODE_ENV=development node index.js"
+    "dev": "NODE_ENV=development nodemon index.js"
   },
   "engines": {
     "node": "v6.2.0"
@@ -20,6 +20,7 @@
     "co": "4.6.0",
     "lodash": "4.13.1",
     "mongodb": "2.2.10",
+    "nodemon": "^1.11.0",
     "superagent": "2.0.0-alpha.3",
     "superagent-promise": "1.1.0"
   },

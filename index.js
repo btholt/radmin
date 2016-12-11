@@ -8,6 +8,7 @@ const fs = require('fs')
 const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
 const token = config.private[process.env.NODE_ENV].slackKey
+const newUserRegex = () => /(?:reddit.com\/u(ser)?\/)([\w\d_-]{3,20})/ig
 
 if (!token) {
   logger.error('No Slack token')
@@ -36,13 +37,16 @@ controller.hears(['fullScan'], ['direct_mention'], (bot, msg) => {
   scanner.fullScan(logger, bot.reply.bind(this, msg))
 })
 
-controller.hears(['scan'], ['direct_mention'], (bot, msg) => {
-  const parts = msg.text.split(' ')
-  const replyCB = bot.reply.bind(this, msg)
-  if (parts.length !== 2 || parts[0] !== 'scan') {
-    return logger.info('This is an invalid format. Try saying `scan <username>`', replyCB)
+controller.hears([newUserRegex()], ['ambient'], (bot, msg) => {
+  let execMatches
+  const matcher = newUserRegex()
+  let matches = []
+  while ((execMatches = matcher.exec(msg.text)) !== null) {
+    matches.push(execMatches[2])
   }
-  scanner.scan(parts[1].toLowerCase(), logger, bot.reply.bind(this, msg))
+  matches = _.uniq(matches)
+  const replyCB = bot.reply.bind(this, msg)
+  matches.forEach((match) => scanner.scan(match.toLowerCase(), logger, bot.reply.bind(this, msg)))
 })
 
 controller.hears(['list'], ['direct_mention'], (bot, msg) => {
@@ -54,11 +58,11 @@ controller.hears(['list'], ['direct_mention'], (bot, msg) => {
 
 controller.hears(['subreddit'], ['direct_mention'], (bot, msg) => {
   const parts = msg.text.split(' ')
+  const replyCB = bot.reply.bind(this, msg)
   if (parts.length !== 2 || parts[0] !== 'subreddit') {
     return logger.info('This is an invalid format. Try saying `subreddit <subreddit>`', replyCB)
   }
-
-  discover.scanSubreddit(parts[1], config.maxTopics, logger, bot.reply.bind(this, msg))
+  discover.scanSubreddit(parts[1], config.maxTopics, logger, replyCB)
 })
 
 controller.hears(['topic'], ['direct_mention'], (bot, msg) => {
