@@ -9,6 +9,7 @@ const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
 const token = config.private[process.env.NODE_ENV].slackKey
 const newUserRegex = () => /(?:reddit.com\/u(ser)?\/)([\w\d_-]{3,20})/ig
+const newTopicRegex = () => /(?:reddit.com\/r\/[\w\d-_]+\/comments\/)([\w\d]+)/ig
 
 if (!token) {
   logger.error('No Slack token')
@@ -65,12 +66,13 @@ controller.hears(['subreddit'], ['direct_mention'], (bot, msg) => {
   discover.scanSubreddit(parts[1], config.maxTopics, logger, replyCB)
 })
 
-controller.hears(['topic'], ['direct_mention'], (bot, msg) => {
-  const parts = msg.text.split(' ')
-  const replyCB = bot.reply.bind(this, msg)
-  if (parts.length !== 2 || parts[0] !== 'topic') {
-    return logger.info('This is an invalid format. Try saying `topic <topic id>`. (in https://www.reddit.com/r/blog/comments/2foivo/every_man_is_responsible_for_his_own_soul/ the topic ID is 2foivo)`', replyCB)
+controller.hears([newTopicRegex()], ['ambient'], (bot, msg) => {
+  let execMatches
+  const matcher = newTopicRegex()
+  let matches = []
+  while ((execMatches = matcher.exec(msg.text)) !== null) {
+    matches.push(execMatches[1])
   }
-
-  discover.scanTopic(parts[1], logger, replyCB)
+  matches = _.uniq(matches)
+  matches.forEach((match) => discover.scanTopic(match, logger, bot.reply.bind(this, msg)))
 })

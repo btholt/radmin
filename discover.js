@@ -21,17 +21,12 @@ const scanSubreddit = (subreddit, maxTopics, logger, replyCB) => (
     logger.info(`start subreddit scan of ${subreddit}`, replyCB)
     const data = yield requestSubreddit(subreddit)
     const posts = _.get(data, 'body.data.children', [])
-    // let adminPosts = posts.filter((post) => post.data.distinguished === 'admin')
-    //   .map((post) => post.data.author)
-    // adminPosts = _.uniq(adminPosts)
-    // logger.info(`*${subreddit}*: ${adminPosts.join(', ')}`)
     const promises = []
     for(let i = 0; i < maxTopics && i < posts.length; i++) {
       logger.info(`start scan of topic ${posts[i].data.id}`)
       promises.push(_scanTopic(posts[i].data.id, logger, replyCB))
     }
     const topicAdmins = yield Promise.all(promises)
-    // const allAdmins = _.chain(topicAdmins.concat(adminPosts))
     const allAdmins = _.chain(topicAdmins)
       .flatten()
       .uniq()
