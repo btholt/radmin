@@ -20,7 +20,6 @@ const requestMods = (subreddit) => agent.get(`${SUBREDDIT_URL}${subreddit}${MOD_
 const scanSubreddits = (subreddits, maxTopics, logger, replyCB) => (
   co(function * () {
     const requestNextSubreddit = (index) => {
-      console.log('next', index)
       if (subreddits[index]) {
         return scanSubreddit(subreddits[index], maxTopics, logger, replyCB).then(requestNextSubreddit.bind(this, index+1))
       }
