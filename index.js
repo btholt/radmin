@@ -28,6 +28,13 @@ const botAPI = controller.spawn({
   retry: 'Infinity'
 })
 
+botAPI.startRTM((err) => {
+  console.log('starting up')
+  if (err) {
+    console.log(err)
+  }
+})
+
 controller.hears(['fullScan'], ['direct_mention'], (bot, msg) => {
   const replyCB = bot.reply.bind(this, msg)
   if (config.superusers.indexOf(msg.user) < 0) {
