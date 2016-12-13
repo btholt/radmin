@@ -15,6 +15,19 @@ const mongoUrl = `mongodb://${mongoUsername}:${mongoPassword}@${mongoHost}/${mon
 
 const requestSubreddit = (subreddit) => agent.get(`${SUBREDDIT_URL}${subreddit}${SUBREDDIT_URL_SUFFIX}`)
 const requestTopic = (topic) => agent.get(`${TOPIC_URL}${topic}${SUBREDDIT_URL_SUFFIX}`)
+const requestMods = (subreddit) => agent.get(`${SUBREDDIT_URL}${subreddit}${MOD_URL_SUFFIX}`)
+
+const scanSubreddits = (subreddits, maxTopics, logger, replyCB) => (
+  co(function * () {
+    const requestNextSubreddit = (index) => {
+      console.log('next', index)
+      if (subreddits[index]) {
+        return scanSubreddit(subreddits[index], maxTopics, logger, replyCB).then(requestNextSubreddit.bind(this, index+1))
+      }
+    }
+    requestNextSubreddit(0)
+  }).catch((err) => logger.error(err, replyCB))
+)
 
 const scanSubreddit = (subreddit, maxTopics, logger, replyCB) => (
   co(function * () {
@@ -33,7 +46,8 @@ const scanSubreddit = (subreddit, maxTopics, logger, replyCB) => (
       .map((admin) => admin.toLowerCase())
       .value()
     logger.info(`*overall*: ${allAdmins.join(', ')}`)
-    updateDB(allAdmins, logger, replyCB)
+    updateDB(allAdmins, `/r/${subreddit}`, logger, replyCB)
+    return yield Promise.resolve(true)
   }).catch((err) => logger.error(err, replyCB))
 )
 
@@ -42,7 +56,7 @@ const scanTopic = (topic, logger, replyCB) => (
     logger.info(`start scan of topic ${topic}`, replyCB)
     let admins = yield _scanTopic(topic, logger, replyCB)
     admins = admins.map((admin) => admin.toLowerCase())
-    updateDB(admins, logger, replyCB)
+    updateDB(admins, `topic ${topic}`, logger, replyCB)
   })
 )
 
@@ -51,8 +65,8 @@ const _scanTopic = (topic, logger, replyCB) => {
     co(function * () {
       const data = yield requestTopic(topic)
       let admins = []
-      const isPostAdmin = _.get(data, 'body.0.data.children.0.data.distinguished', null)
-      if (isPostAdmin) {
+      const postAdminField = _.get(data, 'body.0.data.children.0.data.distinguished', null)
+      if (postAdminField === 'admin') {
         const author = _.get(data, 'body.0.data.children.0.data.author', false)
         if (author) {
           admins.push(author)
@@ -77,7 +91,7 @@ const findAdmins = (children, admins) => {
   }
 }
 
-const updateDB = (foundAdmins, logger, replyCB) => (
+const updateDB = (foundAdmins, location, logger, replyCB) => (
   co(function * () {
     logger.info('start update')
     const db = yield connect(mongoUrl)
@@ -88,7 +102,7 @@ const updateDB = (foundAdmins, logger, replyCB) => (
     logger.info(`*needs action*: ${needsActionAdmins.join(', ')}`)
 
     if (needsActionAdmins.length <= 0) {
-      logger.info('did not discover any new admins or exreddits', replyCB)
+      logger.info(`did not discover any new admins or exreddits in ${location}`, replyCB)
       return
     }
 
@@ -104,20 +118,21 @@ const updateDB = (foundAdmins, logger, replyCB) => (
     if (newsworthyAdmins.length > 0) {
       const [newAdmins, newExreddits] = newsworthyAdmins.reduce(reduceAdminStatus, [[], []])
       if (newAdmins.length > 0) {
-        logger.result(`*new admins discovered*: ${newAdmins.join(', ')}`, replyCB)
+        logger.result(`*new admins discovered in ${location}*: ${newAdmins.join(', ')}`, replyCB)
       }
       if (newExreddits.length > 0) {
-        logger.result(`*new exreddits discovered*: ${newExreddits.join(', ')}`, replyCB)
+        logger.result(`*new exreddits discovered in ${location}*: ${newExreddits.join(', ')}`, replyCB)
       }
       const result = yield collection.insertMany(newsworthyAdmins)
       logger.result(`wrote to ${mongoAdminCollection}`)
     } else {
-      logger.info('did not discover any new admins or exreddits', replyCB)
+      logger.info(`did not discover any new admins or exreddits in ${location}`, replyCB)
     }
   }).catch((err) => logger.error(err, replyCB))
 )
 
 module.exports = {
   scanSubreddit,
+  scanSubreddits,
   scanTopic
 }

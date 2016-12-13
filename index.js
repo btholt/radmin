@@ -10,6 +10,7 @@ const config = JSON.parse(configBuffer)
 const token = config.private[process.env.NODE_ENV].slackKey
 const newUserRegex = () => /(?:reddit.com\/u(ser)?\/)([\w\d_-]{3,20})/ig
 const newTopicRegex = () => /(?:reddit.com\/r\/[\w\d-_]+\/comments\/)([\w\d]+)/ig
+const newSubredditRegex = () => /(?:reddit.com\/r\/)([\w\d-_]+\b)(?!\/[\w\d-_])/ig
 
 if (!token) {
   logger.error('No Slack token')
@@ -57,13 +58,16 @@ controller.hears(['list'], ['direct_mention'], (bot, msg) => {
   scanner.list(logger, bot.reply.bind(this, msg))
 })
 
-controller.hears(['subreddit'], ['direct_mention'], (bot, msg) => {
-  const parts = msg.text.split(' ')
-  const replyCB = bot.reply.bind(this, msg)
-  if (parts.length !== 2 || parts[0] !== 'subreddit') {
-    return logger.info('This is an invalid format. Try saying `subreddit <subreddit>`', replyCB)
+controller.hears([newSubredditRegex()], ['ambient'], (bot, msg) => {
+  let execMatches
+  const matcher = newSubredditRegex()
+  let matches = []
+  while ((execMatches = matcher.exec(msg.text)) !== null) {
+    matches.push(execMatches[1])
   }
-  discover.scanSubreddit(parts[1], config.maxTopics, logger, replyCB)
+  matches = _.uniq(matches).map((name) => name.toLowerCase())
+  const replyCB = bot.reply.bind(this, msg)
+  discover.scanSubreddits(matches, config.maxTopics, logger, bot.reply.bind(this, msg))
 })
 
 controller.hears([newTopicRegex()], ['ambient'], (bot, msg) => {
