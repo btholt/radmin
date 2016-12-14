@@ -103,23 +103,23 @@ const updateDBFullScan = (users, collection, logger, replyCB) => (
   }).catch((err) => logger.error(err, replyCB))
 )
 
-const scan = (username, logger, replyCB) => (
+const scan = (username, logger, replyCB, reactCB) => (
   co(function * () {
-    logger.info(`start scan for ${username}`, replyCB)
+    logger.info(`start scan for ${username}`)
     const [ userData, db ] = yield Promise.all([
       yield fetchUserPage(username),
       yield connect(mongoUrl)
     ])
     const collection = db.collection(mongoAdminCollection)
     const siteUser = stillAdmin(userData)
-    console.log(siteUser)
 
     const user = yield collection.findOne({username})
     let result
 
     if (user) {
       if (user.isAdmin && siteUser.isAdmin) {
-        logger.info(`${username} was already known to be an admin`, replyCB)
+        logger.info(`${username} was already known to be an admin`)
+        reactCB()
       } else if (user.isAdmin && !siteUser.isAdmin) {
         logger.write(`${username} is a new exreddit`, replyCB)
         result = yield collection.updateOne({username}, {$set: {isAdmin: false}})
@@ -127,14 +127,16 @@ const scan = (username, logger, replyCB) => (
         logger.write(`${username} was an exreddit and now is an admin? Traitor`, replyCB)
         result = yield collection.updateOne({username}, {$set: {isAdmin: true}})
       } else {
-        logger.info(`${username} was already known to be an exreddit`, replyCB)
+        logger.info(`${username} was already known to be an exreddit`)
+        reactCB()
       }
     } else {
       if (siteUser.isAdmin) {
         logger.write(`${username} is a new admin`, replyCB)
         result = yield collection.insertOne({isAdmin: true, username})
       } else {
-        logger.write(`${username} is not an admin`, replyCB)
+        logger.write(`${username} is not an admin`)
+        reactCB()
       }
     }
     if (result && result.insertedCount <= 0 && result.modifiedCount <= 0) {

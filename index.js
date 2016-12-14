@@ -10,6 +10,7 @@ const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
 const token = config.private[process.env.NODE_ENV].slackKey
 const channel = config.private[process.env.NODE_ENV].channel
+const emoji = config.emoji
 const newUserRegex = () => /(?:reddit.com\/u(ser)?\/)([\w\d_-]{3,20})/ig
 const newTopicRegex = () => /(?:reddit.com\/r\/[\w\d-_]+\/comments\/)([\w\d]+)/ig
 const newSubredditRegex = () => /(?:reddit.com\/r\/)([\w\d-_]+\b)(?!\/[\w\d-_])/ig
@@ -44,6 +45,8 @@ controller.hears(['fullScan'], ['direct_mention'], (bot, msg) => {
 })
 
 controller.hears([newUserRegex()], ['ambient'], (bot, msg) => {
+  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add, emoji.end)
+  logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
   const matcher = newUserRegex()
   let matches = []
@@ -52,7 +55,7 @@ controller.hears([newUserRegex()], ['ambient'], (bot, msg) => {
   }
   matches = _.uniq(matches)
   const replyCB = bot.reply.bind(this, msg)
-  matches.forEach((match) => scanner.scan(match.toLowerCase(), logger, bot.reply.bind(this, msg)))
+  matches.forEach((match) => scanner.scan(match.toLowerCase(), logger, bot.reply.bind(this, msg), reactCB))
 })
 
 controller.hears(['list'], ['direct_mention'], (bot, msg) => {
@@ -63,6 +66,8 @@ controller.hears(['list'], ['direct_mention'], (bot, msg) => {
 })
 
 controller.hears([newSubredditRegex()], ['ambient'], (bot, msg) => {
+  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add, emoji.end)
+  logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
   const matcher = newSubredditRegex()
   let matches = []
@@ -71,10 +76,12 @@ controller.hears([newSubredditRegex()], ['ambient'], (bot, msg) => {
   }
   matches = _.uniq(matches).map((name) => name.toLowerCase())
   const replyCB = bot.reply.bind(this, msg)
-  discover.scanSubreddits(matches, config.maxTopics, logger, bot.reply.bind(this, msg))
+  discover.scanSubreddits(matches, config.maxTopics, logger, bot.reply.bind(this, msg), reactCB)
 })
 
 controller.hears([newTopicRegex()], ['ambient'], (bot, msg) => {
+  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add, emoji.end)
+  logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
   const matcher = newTopicRegex()
   let matches = []
@@ -82,14 +89,14 @@ controller.hears([newTopicRegex()], ['ambient'], (bot, msg) => {
     matches.push(execMatches[1])
   }
   matches = _.uniq(matches)
-  matches.forEach((match) => discover.scanTopic(match, logger, bot.reply.bind(this, msg)))
+  matches.forEach((match) => discover.scanTopic(match, logger, bot.reply.bind(this, msg), reactCB))
 })
 
 const subredditJob = schedule.scheduleJob({hour: 12, minute: 30, dayOfWeek: 5}, () => {
   botAPI.startRTM((err, bot, payload) => {
     const replyCB = (text) => bot.say({text, channel})
     logger.info('starting weekly scan of subreddits', replyCB)
-    discover.scanSubreddits(config.weeklySubreddits, config.maxTopics, logger, replyCB)
+    discover.scanSubreddits(config.weeklySubreddits, config.maxTopics, logger, replyCB, () => {})
   })
 })
 

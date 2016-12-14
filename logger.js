@@ -32,5 +32,9 @@ module.exports = {
   say (msg, replyCB) {
     replyCB(msg)
     this.info(`saying '${msg}'`)
+  },
+  react (msg, cb, emoji) {
+    cb({name: emoji, channel: msg.channel, timestamp: msg.ts})
+    this.info(`adding ${emoji} reaction to channel: ${msg.channel} and timestamp ${msg.ts}`)
   }
 }
