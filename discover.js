@@ -7,7 +7,7 @@ const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
 const SUBREDDIT_URL = 'https://www.reddit.com/r/'
 const TOPIC_URL = 'https://www.reddit.com/comments/'
-const SUBREDDIT_URL_SUFFIX = '.json'
+const SUBREDDIT_URL_SUFFIX = '.json?limit=500'
 const { mongoUsername, mongoPassword, mongoHost, mongoPath, mongoAdminCollection } = config.private[process.env.NODE_ENV]
 const maxConnections = config.maxConnections || 3
 const { emoji } = config
