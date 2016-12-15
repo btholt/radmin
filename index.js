@@ -45,7 +45,7 @@ controller.hears(['fullScan'], ['direct_mention'], (bot, msg) => {
 })
 
 controller.hears([newUserRegex()], ['ambient'], (bot, msg) => {
-  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add, emoji.end)
+  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add)
   logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
   const matcher = newUserRegex()
@@ -66,7 +66,7 @@ controller.hears(['list'], ['direct_mention'], (bot, msg) => {
 })
 
 controller.hears([newSubredditRegex()], ['ambient'], (bot, msg) => {
-  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add, emoji.end)
+  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add)
   logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
   const matcher = newSubredditRegex()
@@ -80,7 +80,7 @@ controller.hears([newSubredditRegex()], ['ambient'], (bot, msg) => {
 })
 
 controller.hears([newTopicRegex()], ['ambient'], (bot, msg) => {
-  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add, emoji.end)
+  const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add)
   logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
   const matcher = newTopicRegex()

@@ -10,6 +10,7 @@ const TOPIC_URL = 'https://www.reddit.com/comments/'
 const SUBREDDIT_URL_SUFFIX = '.json'
 const { mongoUsername, mongoPassword, mongoHost, mongoPath, mongoAdminCollection } = config.private[process.env.NODE_ENV]
 const maxConnections = config.maxConnections || 3
+const { emoji } = config
 const { connect } = require('mongodb').MongoClient
 const mongoUrl = `mongodb://${mongoUsername}:${mongoPassword}@${mongoHost}/${mongoPath}`
 
@@ -30,14 +31,13 @@ const scanSubreddits = (subreddits, maxTopics, logger, replyCB, reactCB) => (
 
 const scanSubreddit = (subreddit, maxTopics, logger, replyCB, reactCB) => (
   co(function * () {
-    reactCB()
     logger.info(`start subreddit scan of ${subreddit}`)
     const data = yield requestSubreddit(subreddit)
     const posts = _.get(data, 'body.data.children', [])
     const promises = []
     for(let i = 0; i < maxTopics && i < posts.length; i++) {
       logger.info(`start scan of topic ${posts[i].data.id}`)
-      promises.push(_scanTopic(posts[i].data.id, logger, replyCB))
+      promises.push(_scanTopic(posts[i].data.id, logger, replyCB, reactCB))
     }
     const topicAdmins = yield Promise.all(promises)
     const allAdmins = _.chain(topicAdmins)
@@ -54,13 +54,13 @@ const scanSubreddit = (subreddit, maxTopics, logger, replyCB, reactCB) => (
 const scanTopic = (topic, logger, replyCB, reactCB) => (
   co(function * () {
     logger.info(`start scan of topic ${topic}`)
-    let admins = yield _scanTopic(topic, logger, replyCB)
+    let admins = yield _scanTopic(topic, logger, replyCB, reactCB)
     admins = admins.map((admin) => admin.toLowerCase())
     updateDB(admins, `topic ${topic}`, logger, replyCB, reactCB)
   })
 )
 
-const _scanTopic = (topic, logger, replyCB) => {
+const _scanTopic = (topic, logger, replyCB, reactCB) => {
   return new Promise((resolve, reject) => {
     co(function * () {
       const data = yield requestTopic(topic)
@@ -74,6 +74,10 @@ const _scanTopic = (topic, logger, replyCB) => {
       }
       findAdmins(_.get(data, 'body.1.data.children', []), admins)
       admins = _.uniq(admins)
+      console.log('admins', admins)
+      if (admins.length > 0) {
+        reactCB(emoji.adminFound)
+      }
       logger.info(`*${topic}*: ${admins.join(', ')}`)
       resolve(admins)
     }).catch((err) => logger.error(err, replyCB))
@@ -103,7 +107,7 @@ const updateDB = (foundAdmins, location, logger, replyCB, reactCB) => (
 
     if (needsActionAdmins.length <= 0) {
       logger.info(`did not discover any new admins or exreddits in ${location}`)
-      reactCB()
+      reactCB(emoji.end)
       return
     }
 
@@ -128,7 +132,7 @@ const updateDB = (foundAdmins, location, logger, replyCB, reactCB) => (
       logger.result(`wrote to ${mongoAdminCollection}`)
     } else {
       logger.info(`did not discover any new admins or exreddits in ${location}`)
-      reactCB()
+      reactCB(emoji.end)
     }
   }).catch((err) => logger.error(err, replyCB))
 )
