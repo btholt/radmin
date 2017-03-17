@@ -24,6 +24,7 @@ const controller = Botkit.slackbot({
   debug: false
 })
 
+
 const botAPI = controller.spawn({
   token: token,
   retry: 'Infinity'
@@ -36,15 +37,17 @@ botAPI.startRTM((err) => {
   }
 })
 
-controller.hears(['fullScan'], ['direct_mention'], (bot, msg) => {
+const wrapFunction = (fn) => _.throttle(fn, 2000, {trailing: false, leading: true})
+
+controller.hears(['fullScan'], ['direct_mention'], wrapFunction((bot, msg) => {
   const replyCB = bot.reply.bind(this, msg)
   if (config.superusers.indexOf(msg.user) < 0) {
     return logger.info("You don't have permission to do this. Sorry. This command hammers the reddit API.", replyCB)
   }
   scanner.fullScan(logger, bot.reply.bind(this, msg))
-})
+}))
 
-controller.hears([newUserRegex()], ['ambient'], (bot, msg) => {
+controller.hears([newUserRegex()], ['ambient'], wrapFunction((bot, msg) => {
   const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add)
   logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
@@ -56,16 +59,16 @@ controller.hears([newUserRegex()], ['ambient'], (bot, msg) => {
   matches = _.uniq(matches)
   const replyCB = bot.reply.bind(this, msg)
   matches.forEach((match) => scanner.scan(match.toLowerCase(), logger, bot.reply.bind(this, msg), reactCB))
-})
+}))
 
-controller.hears(['list'], ['direct_mention'], (bot, msg) => {
+controller.hears(['list'], ['direct_mention'], wrapFunction((bot, msg) => {
   const parts = msg.text.split(' ')
   if (parts[0] !== 'list') return
 
   scanner.list(logger, bot.reply.bind(this, msg))
-})
+}))
 
-controller.hears([newSubredditRegex()], ['ambient'], (bot, msg) => {
+controller.hears([newSubredditRegex()], ['ambient'], wrapFunction((bot, msg) => {
   const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add)
   logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
@@ -77,9 +80,9 @@ controller.hears([newSubredditRegex()], ['ambient'], (bot, msg) => {
   matches = _.uniq(matches).map((name) => name.toLowerCase())
   const replyCB = bot.reply.bind(this, msg)
   discover.scanSubreddits(matches, config.maxTopics, logger, bot.reply.bind(this, msg), reactCB)
-})
+}))
 
-controller.hears([newTopicRegex()], ['ambient'], (bot, msg) => {
+controller.hears([newTopicRegex()], ['ambient'], wrapFunction((bot, msg) => {
   const reactCB = logger.react.bind(logger, msg, bot.api.reactions.add)
   logger.react(msg, bot.api.reactions.add, emoji.start)
   let execMatches
@@ -90,7 +93,7 @@ controller.hears([newTopicRegex()], ['ambient'], (bot, msg) => {
   }
   matches = _.uniq(matches)
   matches.forEach((match) => discover.scanTopic(match, logger, bot.reply.bind(this, msg), reactCB))
-})
+}))
 
 const subredditJob = schedule.scheduleJob({hour: 12, minute: 30, dayOfWeek: 5}, () => {
   botAPI.startRTM((err, bot, payload) => {
