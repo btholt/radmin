@@ -4,7 +4,7 @@ const co = require('co')
 const _ = require('lodash')
 const fs = require('fs')
 const { connect } = require('mongodb').MongoClient
-const PROFILE_URL_BASE = 'https://www.reddit.com/user/'
+const PROFILE_URL_BASE = 'https://origin.reddit.com/user/'
 const ADMIN_SELECTOR = '.titlebox .admin'
 const configBuffer = fs.readFileSync('./config.json')
 const config = JSON.parse(configBuffer)
@@ -119,7 +119,7 @@ const scan = (username, logger, replyCB, reactCB) => (
     if (user) {
       if (user.isAdmin && siteUser.isAdmin) {
         logger.info(`${username} was already known to be an admin`)
-        reactCB()
+        reactCB(config.emoji.end)
       } else if (user.isAdmin && !siteUser.isAdmin) {
         logger.write(`${username} is a new exreddit`, replyCB)
         result = yield collection.updateOne({username}, {$set: {isAdmin: false}})
@@ -128,7 +128,7 @@ const scan = (username, logger, replyCB, reactCB) => (
         result = yield collection.updateOne({username}, {$set: {isAdmin: true}})
       } else {
         logger.info(`${username} was already known to be an exreddit`)
-        reactCB()
+        reactCB(config.emoji.end)
       }
     } else {
       if (siteUser.isAdmin) {
@@ -136,7 +136,7 @@ const scan = (username, logger, replyCB, reactCB) => (
         result = yield collection.insertOne({isAdmin: true, username})
       } else {
         logger.write(`${username} is not an admin`)
-        reactCB()
+        reactCB(config.emoji.end)
       }
     }
     if (result && result.insertedCount <= 0 && result.modifiedCount <= 0) {
